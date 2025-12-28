@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { gsap } from 'gsap';
-import { X, User, MapPin, Heart, Clock, Settings, LogOut, ChevronRight, Edit2, Save, Package } from 'lucide-react';
+import { X, User, MapPin, Heart, Clock, Settings, LogOut, ChevronRight, Edit2, Save, Package, Phone, Shield, CheckCircle } from 'lucide-react';
 import { useUIStore, useUserStore, useOrderStore } from '../store/store';
+import { useAuth } from '../hooks/useAuth';
 
 export default function UserModal() {
   const modalRef = useRef(null);
@@ -12,9 +13,10 @@ export default function UserModal() {
   const [editName, setEditName] = useState('');
   const [editTable, setEditTable] = useState('');
   
-  const { isUserModalOpen, closeUserModal } = useUIStore();
+  const { isUserModalOpen, closeUserModal, openAuthModal } = useUIStore();
   const { preferences, updatePreferences, setHasSeenWelcome, logout } = useUserStore();
   const { orders } = useOrderStore();
+  const { isAuthenticated, user: authUser, logout: authLogout } = useAuth();
   
   useEffect(() => {
     setEditName(preferences.name || '');
@@ -60,8 +62,20 @@ export default function UserModal() {
   const handleReset = () => {
     setHasSeenWelcome(false);
     logout();
+    if (isAuthenticated) {
+      authLogout();
+    }
     closeUserModal();
     window.location.reload();
+  };
+  
+  const handleLoginClick = () => {
+    closeUserModal();
+    setTimeout(() => openAuthModal(), 100);
+  };
+  
+  const handleLogoutAuth = async () => {
+    await authLogout();
   };
   
   return (
@@ -164,6 +178,48 @@ export default function UserModal() {
         
         {/* Menu Items */}
         <div className="px-6 pb-8 space-y-2 max-h-[50vh] overflow-y-auto">
+          {/* Phone Verification Status */}
+          {isAuthenticated ? (
+            <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="text-left">
+                  <span className="font-semibold text-green-700 block">Phone Verified</span>
+                  <span className="text-sm text-green-600/70">
+                    {authUser?.phoneNumber || 'Logged in'}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={handleLogoutAuth}
+                className="text-sm text-green-600 font-medium hover:text-green-700"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={handleLoginClick}
+              className="w-full flex items-center justify-between p-4 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors group mb-2"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                  <Phone className="w-5 h-5 text-primary-600" />
+                </div>
+                <div className="text-left">
+                  <span className="font-semibold text-primary-700 block">Login with Phone</span>
+                  <span className="text-sm text-primary-600/70">Verify via OTP</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-primary-600">
+                <Shield className="w-4 h-4" />
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </button>
+          )}
+
           {/* Favorites */}
           <Link 
             to="/favorites"
