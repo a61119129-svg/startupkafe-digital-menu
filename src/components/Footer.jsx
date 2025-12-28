@@ -33,7 +33,7 @@ export default function Footer() {
               </a>
               <div className="flex items-start gap-3 text-white/70">
                 <MapPin className="w-4 h-4 mt-1" />
-                <span>123 Startup Lane, Innovation Hub,<br />Bangalore - 560001</span>
+                <span>104 S.N BANERJEE ROAD,<br />KOLKATA - 700120</span>
               </div>
             </div>
           </div>
