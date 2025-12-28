@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3000,
     host: true,
     open: true,
-    allowedHosts: ['79662a69bb52.ngrok-free.app', '.ngrok-free.app', '.ngrok.io']
+    allowedHosts: ['532b6e34222a.ngrok-free.app', '.ngrok-free.app', '.ngrok.io']
   },
   build: {
     rollupOptions: {
