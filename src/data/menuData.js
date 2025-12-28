@@ -132,3 +132,7 @@ export const searchItems = (query) => {
 export const getCategoryById = (categoryId) => {
   return menuData.categories.find(cat => cat.id === categoryId);
 };
+
+// Export items array directly for easier access
+export const menuItems = menuData.items;
+export const categories = menuData.categories;
