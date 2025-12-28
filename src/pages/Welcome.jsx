@@ -1,18 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
-import { Coffee, ArrowRight, Sparkles, Heart, Clock, Utensils } from 'lucide-react';
+import { Coffee, ArrowRight, Sparkles, Heart, Clock, Utensils, Phone, Shield, Loader2, CheckCircle, RefreshCw } from 'lucide-react';
 import { useUserStore } from '../store/store';
 import Logo from '../components/Logo';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Welcome() {
   const navigate = useNavigate();
   const containerRef = useRef(null);
-  const [step, setStep] = useState(0);
+  const otpInputsRef = useRef([]);
+  const [step, setStep] = useState(0); // 0: welcome, 1: name/table, 2: phone verification
   const [name, setName] = useState('');
   const [tableNumber, setTableNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [resendTimer, setResendTimer] = useState(0);
+  
   const setHasSeenWelcome = useUserStore((state) => state.setHasSeenWelcome);
   const updatePreferences = useUserStore((state) => state.updatePreferences);
+  
+  const {
+    loading,
+    error,
+    isOtpSent,
+    isAuthenticated,
+    sendOTP,
+    verifyOTP,
+    resetAuth
+  } = useAuth();
   
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -75,13 +91,84 @@ export default function Welcome() {
     });
   };
   
-  const handleSubmit = () => {
+  const handleProceedToPhone = () => {
     if (name.trim()) {
       updatePreferences({ name: name.trim(), tableNumber: tableNumber.trim() });
     }
-    setHasSeenWelcome(true);
+    // Animate to phone step
+    gsap.to('.step-1', {
+      opacity: 0,
+      y: -30,
+      duration: 0.4,
+      ease: 'power2.in',
+      onComplete: () => setStep(2)
+    });
+  };
+  
+  const handleSendOTP = async () => {
+    if (phoneNumber.length !== 10) return;
     
-    // Animate out
+    const result = await sendOTP(phoneNumber);
+    if (result.success) {
+      setResendTimer(30);
+      setTimeout(() => otpInputsRef.current[0]?.focus(), 100);
+    }
+  };
+  
+  const handleOtpChange = (index, value) => {
+    // Handle paste
+    if (value.length > 1) {
+      const digits = value.replace(/\D/g, '').slice(0, 6).split('');
+      const newOtp = [...otp];
+      digits.forEach((digit, i) => {
+        if (index + i < 6) newOtp[index + i] = digit;
+      });
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + digits.length, 5);
+      otpInputsRef.current[nextIndex]?.focus();
+      return;
+    }
+    
+    if (!/^\d*$/.test(value)) return;
+    
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+    
+    if (value && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  };
+  
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    }
+  };
+  
+  const handleVerifyOTP = async () => {
+    const otpString = otp.join('');
+    if (otpString.length !== 6) return;
+    
+    const result = await verifyOTP(otpString);
+    if (result.success) {
+      // Save phone to preferences
+      updatePreferences({ phone: phoneNumber });
+      handleComplete();
+    }
+  };
+  
+  const handleResendOTP = async () => {
+    if (resendTimer > 0) return;
+    const result = await sendOTP(phoneNumber);
+    if (result.success) {
+      setResendTimer(30);
+      setOtp(['', '', '', '', '', '']);
+    }
+  };
+  
+  const handleComplete = () => {
+    setHasSeenWelcome(true);
     gsap.to(containerRef.current, {
       opacity: 0,
       scale: 1.05,
@@ -100,9 +187,23 @@ export default function Welcome() {
     });
   };
   
+  // Resend timer
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendTimer]);
+  
   useEffect(() => {
     if (step === 1) {
       gsap.fromTo('.step-1',
+        { opacity: 0, y: 30 },
+        { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }
+      );
+    }
+    if (step === 2) {
+      gsap.fromTo('.step-2',
         { opacity: 0, y: 30 },
         { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }
       );
@@ -246,10 +347,10 @@ export default function Welcome() {
               </div>
               
               <button
-                onClick={handleSubmit}
+                onClick={handleProceedToPhone}
                 className="w-full bg-gradient-to-r from-primary-500 to-primary-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3 group"
               >
-                <span>Start Exploring Menu</span>
+                <span>Continue</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
@@ -258,7 +359,170 @@ export default function Welcome() {
               onClick={handleSkip}
               className="w-full mt-4 text-white/70 hover:text-white py-3 text-sm transition-colors"
             >
-              Continue without personalizing
+              Skip for now
+            </button>
+          </div>
+        )}
+        
+        {/* Step 2: Phone Verification */}
+        {step === 2 && (
+          <div className="step-2 w-full max-w-md">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 mx-auto bg-white rounded-2xl shadow-xl flex items-center justify-center mb-4">
+                <Phone className="w-8 h-8 text-primary-500" />
+              </div>
+              <h2 className="font-display text-2xl font-bold text-white mb-2">
+                Verify Your Phone
+              </h2>
+              <p className="text-white/70">
+                We'll send you a 6-digit OTP to verify
+              </p>
+            </div>
+            
+            {/* reCAPTCHA container */}
+            <div id="recaptcha-container"></div>
+            
+            {/* Form */}
+            <div className="bg-white rounded-3xl shadow-2xl p-6">
+              {!isOtpSent ? (
+                /* Phone Input */
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-dark-100 mb-2">
+                      Phone Number
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-cream-50 px-4 py-3.5 rounded-xl border border-cream-200">
+                        <span className="text-lg">🇮🇳</span>
+                        <span className="font-medium text-dark-100">+91</span>
+                      </div>
+                      <input
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="10-digit number"
+                        className="flex-1 px-4 py-3.5 bg-cream-50 border border-cream-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-lg tracking-wider"
+                        maxLength={10}
+                      />
+                    </div>
+                  </div>
+                  
+                  {error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                      <p className="text-sm text-red-600">{error}</p>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={handleSendOTP}
+                    disabled={loading || phoneNumber.length !== 10}
+                    className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 disabled:bg-primary-300 text-white py-4 rounded-xl font-semibold transition-colors"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Sending OTP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Get OTP</span>
+                        <ArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </button>
+                  
+                  <div className="flex items-start gap-3 p-4 bg-cream-50 rounded-xl">
+                    <Shield className="w-5 h-5 text-primary-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-dark-100/70">
+                      Your number is safe with us. We'll only use it for order updates.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* OTP Input */
+                <div className="space-y-5">
+                  <div className="text-center">
+                    <p className="text-dark-100/70 mb-4">
+                      Enter OTP sent to <span className="font-semibold text-dark-100">+91 {phoneNumber}</span>
+                    </p>
+                    
+                    <div className="flex justify-center gap-2 mb-4">
+                      {otp.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={el => otpInputsRef.current[index] = el}
+                          type="text"
+                          inputMode="numeric"
+                          value={digit}
+                          onChange={(e) => handleOtpChange(index, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                          className="w-12 h-14 text-center text-xl font-bold bg-cream-50 border-2 border-cream-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                          maxLength={6}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                      <p className="text-sm text-red-600">{error}</p>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={handleVerifyOTP}
+                    disabled={loading || otp.join('').length !== 6}
+                    className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 disabled:bg-primary-300 text-white py-4 rounded-xl font-semibold transition-colors"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        <span>Verify & Continue</span>
+                      </>
+                    )}
+                  </button>
+                  
+                  <div className="text-center">
+                    {resendTimer > 0 ? (
+                      <p className="text-sm text-dark-100/60">
+                        Resend OTP in <span className="font-medium text-primary-600">{resendTimer}s</span>
+                      </p>
+                    ) : (
+                      <button
+                        onClick={handleResendOTP}
+                        disabled={loading}
+                        className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1 mx-auto"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Resend OTP
+                      </button>
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      resetAuth();
+                      setOtp(['', '', '', '', '', '']);
+                    }}
+                    className="w-full text-sm text-dark-100/60 hover:text-dark-100 transition-colors"
+                  >
+                    ← Change phone number
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <button
+              onClick={handleSkip}
+              className="w-full mt-4 text-white/70 hover:text-white py-3 text-sm transition-colors"
+            >
+              Skip verification for now
             </button>
           </div>
         )}
